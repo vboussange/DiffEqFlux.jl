@@ -66,6 +66,7 @@ function multiple_shoot(
     solver::DiffEqBase.AbstractODEAlgorithm,
     group_size::Integer;
     continuity_term::Real=100,
+    threading::Bool = false,
     kwargs...
 )
     datasize = size(ode_data, 2)
@@ -78,20 +79,38 @@ function multiple_shoot(
     ranges = group_ranges(datasize, group_size)
 
     # Multiple shooting predictions
-    sols = [
-        solve(
-            remake(
-                prob;
-                p=p,
-                tspan=(tsteps[first(rg)], tsteps[last(rg)]),
-                u0=ode_data[:, first(rg)],
-            ),
-            solver;
-            saveat=tsteps[rg],
-            kwargs...
-        ) for rg in ranges
-    ]
-    group_predictions = Array.(sols)
+    if !threading
+        sols = [
+            solve(
+                remake(
+                    prob;
+                    p=p,
+                    tspan=(tsteps[first(rg)], tsteps[last(rg)]),
+                    u0=ode_data[:, first(rg)],
+                ),
+                solver;
+                saveat=tsteps[rg],
+                kwargs...
+            ) for rg in ranges
+        ]
+        group_predictions = Array.(sols)
+    else
+        sols = SciMLBase.tmap(rg -> begin
+                    solve(
+                        remake(
+                            prob;
+                            p=p,
+                            tspan=(tsteps[first(rg)], tsteps[last(rg)]),
+                            u0=ode_data[:, first(rg)],
+                        ),
+                        solver;
+                        saveat=tsteps[rg],
+                        kwargs...
+                    ) 
+                    end,
+                    ranges)
+        group_predictions = Array.(sols)
+    end
 
     # Abort and return infinite loss if one of the integrations failed
     retcodes = [sol.retcode for sol in sols]

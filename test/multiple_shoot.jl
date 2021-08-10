@@ -47,7 +47,7 @@ function loss_single_shooting(p)
     return l, pred
 end
 
-res_single_shooting = DiffEqFlux.sciml_train(loss_single_shooting, neuralode.p,
+@time res_single_shooting = DiffEqFlux.sciml_train(loss_single_shooting, neuralode.p,
                                           ADAM(0.05),
 										  maxiters = 300)
 
@@ -64,13 +64,17 @@ function loss_multiple_shooting(p)
                           abstol=1e-8, reltol=1e-6) # test solver kwargs
 end
 
-res_ms = DiffEqFlux.sciml_train(loss_multiple_shooting, neuralode.p,
+@time res_ms = DiffEqFlux.sciml_train(loss_multiple_shooting, neuralode.p,
                                 ADAM(0.05), maxiters = 300)
 
 # Calculate single shooting loss with parameter from multiple_shoot training
 loss_ms, _ = loss_single_shooting(res_ms.minimizer)
 println("Multiple shooting loss: $(loss_ms)")
 @test loss_ms < 10loss_ss
+
+# threading
+@time res_ms = DiffEqFlux.sciml_train(loss_multiple_shooting, neuralode.p,
+                                ADAM(0.05), maxiters = 300, threading=true)
 
 # Test with custom loss function
 group_size = 4
@@ -138,7 +142,7 @@ function loss_multiple_shooting_ens(p)
     return multiple_shoot(p, ode_data_ensemble, tsteps, ensemble_prob, ensemble_alg, 
                           loss_function, Tsit5(),
                           group_size; continuity_term,
-                          abstol=1e-8, reltol=1e-6) # test solver kwargs
+                          trajectories, abstol=1e-8, reltol=1e-6) # test solver kwargs
 end
                                 
 res_ms_ensembles = DiffEqFlux.sciml_train(loss_multiple_shooting_ens, neuralode.p,
